@@ -22,7 +22,9 @@ export function usePaginatedTransactions(): PaginatedTransactionsResult {
         return response
       }
 
-      return { data: response.data, nextPage: response.nextPage }
+      // Bug 4 - Keeps previous transactions in front of the newly fetched transactions
+      // On first call previousResponse will be null and only new transactions will show
+      return { data: [...previousResponse?.data, ...response.data], nextPage: response.nextPage }
     })
   }, [fetchWithCache, paginatedTransactions])
 

@@ -13,6 +13,7 @@ export function App() {
   const { data: paginatedTransactions, ...paginatedTransactionsUtils } = usePaginatedTransactions()
   const { data: transactionsByEmployee, ...transactionsByEmployeeUtils } = useTransactionsByEmployee()
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee>(EMPTY_EMPLOYEE) // Related to Bug 6
 
   const transactions = useMemo(
     () => paginatedTransactions?.data ?? transactionsByEmployee ?? null,
@@ -51,7 +52,7 @@ export function App() {
         <hr className="RampBreak--l" />
 
         <InputSelect<Employee>
-          isLoading={isLoading}
+          isLoading={Boolean(!employees)} // Bug 5: Loading this component should only depend on employee data
           defaultValue={EMPTY_EMPLOYEE}
           items={employees === null ? [] : [EMPTY_EMPLOYEE, ...employees]}
           label="Filter by employee"
@@ -60,12 +61,18 @@ export function App() {
             value: item.id,
             label: `${item.firstName} ${item.lastName}`,
           })}
+          // Bug 3 - EMPTY_EMPLOYEE is the item value for "All Employees"
+          // If this is selected we want to load all transactions
           onChange={async (newValue) => {
             if (newValue === null) {
               return
+            } else if (newValue === EMPTY_EMPLOYEE) {
+              await loadAllTransactions()
+            } else {
+              await loadTransactionsByEmployee(newValue.id)
             }
 
-            await loadTransactionsByEmployee(newValue.id)
+            setSelectedEmployee(newValue) // Related to Bug 6
           }}
         />
 
@@ -74,17 +81,25 @@ export function App() {
         <div className="RampGrid">
           <Transactions transactions={transactions} />
 
-          {transactions !== null && (
-            <button
-              className="RampButton"
-              disabled={paginatedTransactionsUtils.loading}
-              onClick={async () => {
-                await loadAllTransactions()
-              }}
-            >
-              View More
-            </button>
-          )}
+          {/* 
+            Bug 6 - Conditionally render view more button
+            1) If there are no more pages, don't show button
+            2) Only show the button if the selected item in the dropdown is "All Employees", which is
+            represented by EMPTY_EMPLOYEE
+          */}
+          {transactions !== null &&
+            paginatedTransactions?.nextPage &&
+            selectedEmployee === EMPTY_EMPLOYEE && (
+              <button
+                className="RampButton"
+                disabled={paginatedTransactionsUtils.loading}
+                onClick={async () => {
+                  await loadAllTransactions()
+                }}
+              >
+                View More
+              </button>
+            )}
         </div>
       </main>
     </Fragment>

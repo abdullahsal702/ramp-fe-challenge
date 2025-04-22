@@ -5,7 +5,7 @@ import { TransactionPane } from "./TransactionPane"
 import { SetTransactionApprovalFunction, TransactionsComponent } from "./types"
 
 export const Transactions: TransactionsComponent = ({ transactions }) => {
-  const { fetchWithoutCache, loading } = useCustomFetch()
+  const { fetchWithoutCache, updateCacheByTransactionId, loading } = useCustomFetch()
 
   const setTransactionApproval = useCallback<SetTransactionApprovalFunction>(
     async ({ transactionId, newValue }) => {
@@ -13,8 +13,13 @@ export const Transactions: TransactionsComponent = ({ transactions }) => {
         transactionId,
         value: newValue,
       })
+
+      // Bug 7 - a cache invalidation issue: the newly updated transactions are stale in the cache
+      // clearCache() - clearing the entire cache is a quick, but less efficient fix
+      // The more optimal solution would be to update cache entries by transaction
+      updateCacheByTransactionId(transactionId, newValue)
     },
-    [fetchWithoutCache]
+    [fetchWithoutCache, updateCacheByTransactionId]
   )
 
   if (transactions === null) {

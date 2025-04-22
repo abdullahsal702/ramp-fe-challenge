@@ -2,6 +2,7 @@ import { useCallback, useContext } from "react"
 import { AppContext } from "../utils/context"
 import { fakeFetch, RegisteredEndpoints } from "../utils/fetch"
 import { useWrappedRequest } from "./useWrappedRequest"
+import { Transaction } from "src/utils/types"
 
 export function useCustomFetch() {
   const { cache } = useContext(AppContext)
@@ -67,7 +68,49 @@ export function useCustomFetch() {
     [cache]
   )
 
-  return { fetchWithCache, fetchWithoutCache, clearCache, clearCacheByEndpoint, loading }
+  // Bug 7 - This fix is not as clean as wiping the entire cache, but it's more efficient
+  // This way we preserve the cache for entries unaffected by a transaction approval
+  // We know from requests.ts that cache entries are of type Employee[], PaginatedResponse<Transaction[]>,
+  // or Transaction[], so we handle those types accordingly
+  const updateCacheByTransactionId = useCallback(
+    (transactionId: string, newValue: boolean) => {
+      if (cache?.current === undefined) {
+        return
+      }
+
+      cache.current.forEach((value, key) => {
+        // Ignore cache entries that only hold employee data
+        if (key === "employee") {
+          return
+        }
+
+        const parsedValue = JSON.parse(value)
+        if (Array.isArray(parsedValue)) {
+          // Handle cache entries of type Transaction[]
+          const updatedValue = parsedValue.map((transaction: Transaction) =>
+            transaction.id === transactionId ? { ...transaction, approved: newValue } : transaction
+          )
+          cache.current.set(key, JSON.stringify(updatedValue))
+        } else if (parsedValue?.data) {
+          // Handle cache entries of type PaginatedResponse<Transaction[]>
+          const updatedValue = parsedValue.data.map((transaction: Transaction) =>
+            transaction.id === transactionId ? { ...transaction, approved: newValue } : transaction
+          )
+          cache.current.set(key, JSON.stringify({ ...parsedValue, data: updatedValue }))
+        }
+      })
+    },
+    [cache]
+  )
+
+  return {
+    fetchWithCache,
+    fetchWithoutCache,
+    clearCache,
+    clearCacheByEndpoint,
+    updateCacheByTransactionId,
+    loading,
+  }
 }
 
 function getCacheKey(endpoint: RegisteredEndpoints, params?: object) {
